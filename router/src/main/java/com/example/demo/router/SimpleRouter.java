@@ -20,7 +20,6 @@ public class SimpleRouter {
     private Context mContext;
     private Map<String, Object> routerMap;
     private static final String PAGE_NAME = "pageName";
-    private Bundle mBundle;
 
     private SimpleRouter() {
 
