@@ -44,7 +44,7 @@ public class Consts {
     public static final String SERIALIZABLE = "java.io.Serializable";
 
     // Custom interface
-    private static final String FACADE_PACKAGE = "com.alibaba.android.arouter.facade";
+    private static final String FACADE_PACKAGE = "com.ssy.s_router_api.facade";
     private static final String TEMPLATE_PACKAGE = ".template";
     private static final String SERVICE_PACKAGE = ".service";
     private static final String MODEL_PACKAGE = ".model";
