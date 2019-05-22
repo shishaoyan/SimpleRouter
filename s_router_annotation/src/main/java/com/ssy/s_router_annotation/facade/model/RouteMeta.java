@@ -32,7 +32,7 @@ public class RouteMeta {
     }
 
     public RouteMeta(Route route, Class<?> destination, RouteType type) {
-        this(type, destination, route.path(), route.group(), route.name(), route.priority(), route.extra());
+        this(type, destination, route.path(), route.group(), route.name(), route.priority(), route.extras());
     }
 
     public RouteType getType() {

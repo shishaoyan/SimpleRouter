@@ -18,7 +18,7 @@ public @interface Route {
 
     String name() default "";
 
-    int extra() default Integer.MIN_VALUE;
+    int extras() default Integer.MIN_VALUE;
 
     int priority() default -1;
 

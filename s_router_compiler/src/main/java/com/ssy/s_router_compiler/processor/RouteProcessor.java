@@ -1,6 +1,7 @@
 package com.ssy.s_router_compiler.processor;
 
 import com.squareup.javapoet.ClassName;
+import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.ParameterSpec;
 import com.squareup.javapoet.ParameterizedTypeName;
 import com.squareup.javapoet.WildcardTypeName;
@@ -10,17 +11,22 @@ import com.ssy.s_router_annotation.facade.model.RouteMeta;
 import com.ssy.s_router_compiler.utils.Consts;
 
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.collections4.MapUtils;
+import org.apache.commons.lang3.StringUtils;
 
 import java.io.IOException;
 import java.io.Writer;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.element.Element;
+import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeMirror;
 import javax.tools.StandardLocation;
@@ -31,6 +37,7 @@ import static com.ssy.s_router_compiler.utils.Consts.FRAGMENT_V4;
 import static com.ssy.s_router_compiler.utils.Consts.IPROVIDER;
 import static com.ssy.s_router_compiler.utils.Consts.IPROVIDER_GROUP;
 import static com.ssy.s_router_compiler.utils.Consts.IROUTE_GROUP;
+import static com.ssy.s_router_compiler.utils.Consts.METHOD_LOAD_INTO;
 import static com.ssy.s_router_compiler.utils.Consts.PACKAGE_OF_GENERATE_DOCS;
 import static com.ssy.s_router_compiler.utils.Consts.SERVICE;
 
@@ -110,16 +117,103 @@ public class RouteProcessor extends BaseProcessor {
                     ClassName.get(RouteMeta.class));
 
             //build input param name
-            ParameterSpec rootParamSpec = ParameterSpec.builder(inputMapTypeOfRoot,"roots").build();
-            ParameterSpec groutParamSpec = ParameterSpec.builder(inputMapTypeOfGroup,"routes").build();
-            ParameterSpec providerParamSpec = ParameterSpec.builder(inputMapTypeOfGroup,"provider").build();
+            ParameterSpec rootParamSpec = ParameterSpec.builder(inputMapTypeOfRoot, "roots").build();
+            ParameterSpec groutParamSpec = ParameterSpec.builder(inputMapTypeOfGroup, "group").build();
+            ParameterSpec providerParamSpec = ParameterSpec.builder(inputMapTypeOfGroup, "provider").build();
 
-            //buidl method 'loadInto'
+            //build method 'loadInto' root
+            MethodSpec.Builder loadIntoMethodOfRootBuilder = MethodSpec.methodBuilder(METHOD_LOAD_INTO)
+                    .addAnnotation(Override.class)
+                    .addModifiers(Modifier.PUBLIC)
+                    .addParameter(rootParamSpec);
+
+            MethodSpec.Builder loadIntoMethodOfGroupBuilder = MethodSpec.methodBuilder(METHOD_LOAD_INTO)
+                    .addAnnotation(Override.class)
+                    .addModifiers(Modifier.PUBLIC)
+                    .addParameter(groutParamSpec);
+
+            //follow a sequence ,find out metas of group first,gennerate jaca file,then sattistics them as root.
+            for (Element element : routeElements) {
+                TypeMirror typeMirror = element.asType();
+                Route route = element.getAnnotation(Route.class);
+                RouteMeta routeMeta = null;
+                if (types.isSubtype(typeMirror, type_activity)) {
+                    logger.info(">>> Found activity route: " + typeMirror.toString() + " <<<");
+                    routeMeta = new RouteMeta(route, null, RouteType.ACTIVITY);
+                    //get all filds annotation by @
+
+                } else if (types.isSubtype(typeMirror, type_service)) {
+                    routeMeta = new RouteMeta(route, null, RouteType.SERVICE);
+                }
+
+                categories(routeMeta);
+            }
+
+            for (Map.Entry<String,Set<RouteMeta>> entry:groupMap.entrySet()){
+                String groupName = entry.getKey();
+                MethodSpec.Builder
+            }
 
 
 
         }
 
 
+    }
+
+    /**
+     * sort metas in group
+     * @param routeMeta
+     */
+    private void categories(RouteMeta routeMeta) {
+        if (routeVerify(routeMeta)) {
+            logger.info(">>> Start categories ,group = " + routeMeta.getGroup() + ",path = " + routeMeta.getPath());
+            Set<RouteMeta> routeMetas = groupMap.get(routeMeta.getGroup());
+            if (CollectionUtils.isEmpty(routeMetas)) {
+                Set<RouteMeta> routeMetasSet = new TreeSet<>(new Comparator<RouteMeta>() {
+                    @Override
+                    public int compare(RouteMeta r1, RouteMeta r2) {
+                        try {
+                            return r1.getPath().compareTo(r2.getPath());
+                        } catch (NullPointerException e) {
+                            logger.error(e.getMessage());
+                            return 0;
+                        }
+                    }
+                });
+                routeMetasSet.add(routeMeta);
+                groupMap.put(routeMeta.getGroup(), routeMetasSet);
+            } else {
+                routeMetas.add(routeMeta);
+            }
+
+        } else {
+            logger.warning(">>> Route meta verity error ,group is " + routeMeta.getGroup() + " <<<");
+        }
+    }
+
+    private boolean routeVerify(RouteMeta meta) {
+        String path = meta.getPath();
+
+        if (StringUtils.isEmpty(path) || !path.startsWith("/")) {   // The path must be start with '/' and not empty!
+            return false;
+        }
+
+        if (StringUtils.isEmpty(meta.getGroup())) { // Use default group(the first word in path)
+            try {
+                String defaultGroup = path.substring(1, path.indexOf("/", 1));
+                if (StringUtils.isEmpty(defaultGroup)) {
+                    return false;
+                }
+
+                meta.setGroup(defaultGroup);
+                return true;
+            } catch (Exception e) {
+                logger.error("Failed to extract default group! " + e.getMessage());
+                return false;
+            }
+        }
+
+        return true;
     }
 }
