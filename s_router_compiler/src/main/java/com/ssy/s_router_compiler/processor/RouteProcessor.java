@@ -1,9 +1,12 @@
 package com.ssy.s_router_compiler.processor;
 
+import com.google.auto.service.AutoService;
 import com.squareup.javapoet.ClassName;
+import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.ParameterSpec;
 import com.squareup.javapoet.ParameterizedTypeName;
+import com.squareup.javapoet.TypeSpec;
 import com.squareup.javapoet.WildcardTypeName;
 import com.ssy.s_router_annotation.facade.annotation.Route;
 import com.ssy.s_router_annotation.facade.enums.RouteType;
@@ -24,6 +27,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 import javax.annotation.processing.ProcessingEnvironment;
+import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.Modifier;
@@ -34,13 +38,15 @@ import javax.tools.StandardLocation;
 import static com.ssy.s_router_compiler.utils.Consts.ACTIVITY;
 import static com.ssy.s_router_compiler.utils.Consts.FRAGMENT;
 import static com.ssy.s_router_compiler.utils.Consts.FRAGMENT_V4;
-import static com.ssy.s_router_compiler.utils.Consts.IPROVIDER;
 import static com.ssy.s_router_compiler.utils.Consts.IPROVIDER_GROUP;
 import static com.ssy.s_router_compiler.utils.Consts.IROUTE_GROUP;
 import static com.ssy.s_router_compiler.utils.Consts.METHOD_LOAD_INTO;
+import static com.ssy.s_router_compiler.utils.Consts.NAME_OF_GROUP;
 import static com.ssy.s_router_compiler.utils.Consts.PACKAGE_OF_GENERATE_DOCS;
+import static com.ssy.s_router_compiler.utils.Consts.PACKAGE_OF_GENERATE_FILE;
 import static com.ssy.s_router_compiler.utils.Consts.SERVICE;
 
+@AutoService(Processor.class)
 public class RouteProcessor extends BaseProcessor {
 
     private Map<String, Set<RouteMeta>> groupMap = new HashMap<>();//moduleName and routeMeta
@@ -52,18 +58,7 @@ public class RouteProcessor extends BaseProcessor {
     @Override
     public synchronized void init(ProcessingEnvironment processingEnvironment) {
         super.init(processingEnvironment);
-
-        if (generateDoc) {
-            try {
-                docWriter = mFiler.createResource(StandardLocation.SOURCE_OUTPUT, PACKAGE_OF_GENERATE_DOCS, "srouter-map-of-" + moduleName + ".json").openWriter();
-            } catch (IOException e) {
-                e.printStackTrace();
-                logger.error("create doc writer failed ,because " + e.getMessage());
-            }
-        }
-        iProvider = elementUtils.getTypeElement(Consts.IPROVIDER).asType();
-        logger.info(">>> RouteProcess init. <<<");
-
+        logger.info(">>> RouteProcess init start. <<<");
 
     }
 
@@ -73,14 +68,12 @@ public class RouteProcessor extends BaseProcessor {
             Set<? extends Element> routeElements = roundEnvironment.getElementsAnnotatedWith(Route.class);
 
             try {
-                logger.info(">>> Found routers ,start ... <<<");
                 this.paserRoutes(routeElements);
             } catch (IOException e) {
                 e.printStackTrace();
             }
             return true;
         }
-
         return false;
     }
 
@@ -95,21 +88,24 @@ public class RouteProcessor extends BaseProcessor {
             TypeMirror type_service = elementUtils.getTypeElement(SERVICE).asType();
             TypeMirror type_fgrament = elementUtils.getTypeElement(FRAGMENT).asType();
             TypeMirror type_fgrament_v4 = elementUtils.getTypeElement(FRAGMENT_V4).asType();
-
             //interface of SRouter
-            TypeElement type_IRouteGroup = elementUtils.getTypeElement(IROUTE_GROUP);
+            TypeElement type_IRouteGroup = elementUtils.getTypeElement("com.ssy.s_router_api.facade.template.IRouteGroup");
             TypeElement type_IProvicerGroup = elementUtils.getTypeElement(IPROVIDER_GROUP);
 
             ClassName routeMetaCn = ClassName.get(RouteMeta.class);
             ClassName routeTpyeCn = ClassName.get(RouteType.class);
 
             // build input tpye format as : Map<String,Class<? extends IRouteGroup>>
+
             ParameterizedTypeName inputMapTypeOfRoot = ParameterizedTypeName.get(
-                    ClassName.get(Map.class), ClassName.get(String.class), ParameterizedTypeName.get(ClassName.get(Class.class),
-                            WildcardTypeName.subtypeOf(ClassName.get(type_IRouteGroup)))
-
+                    ClassName.get(Map.class),
+                    ClassName.get(String.class),
+                    ParameterizedTypeName.get(
+                            ClassName.get(Class.class),
+                            WildcardTypeName.subtypeOf(ClassName.get(type_IRouteGroup))
+                    )
             );
-
+            logger.info(">>> 开始遍历 -----<<");
             //Map<String,RouteMeta>
             ParameterizedTypeName inputMapTypeOfGroup = ParameterizedTypeName.get(
                     ClassName.get(Map.class),
@@ -118,8 +114,7 @@ public class RouteProcessor extends BaseProcessor {
 
             //build input param name
             ParameterSpec rootParamSpec = ParameterSpec.builder(inputMapTypeOfRoot, "roots").build();
-            ParameterSpec groutParamSpec = ParameterSpec.builder(inputMapTypeOfGroup, "group").build();
-            ParameterSpec providerParamSpec = ParameterSpec.builder(inputMapTypeOfGroup, "provider").build();
+            ParameterSpec groutParamSpec = ParameterSpec.builder(inputMapTypeOfGroup, "groups").build();
 
             //build method 'loadInto' root
             MethodSpec.Builder loadIntoMethodOfRootBuilder = MethodSpec.methodBuilder(METHOD_LOAD_INTO)
@@ -127,10 +122,21 @@ public class RouteProcessor extends BaseProcessor {
                     .addModifiers(Modifier.PUBLIC)
                     .addParameter(rootParamSpec);
 
-            MethodSpec.Builder loadIntoMethodOfGroupBuilder = MethodSpec.methodBuilder(METHOD_LOAD_INTO)
-                    .addAnnotation(Override.class)
-                    .addModifiers(Modifier.PUBLIC)
-                    .addParameter(groutParamSpec);
+
+            logger.info(">>> 开始遍历 <<");
+            //first,find all metas of group
+            for (Element element : routeElements) {
+                TypeMirror typeMirror = element.asType();
+                Route route = element.getAnnotation(Route.class);
+                RouteMeta routeMeta = null;
+                if (types.isSubtype(typeMirror, type_activity)) {
+                    logger.info(">>> Found activity route: " + typeMirror.toString());
+                    Map<String, Integer> paramsType = new HashMap<>();
+                    routeMeta = new RouteMeta(route, element, RouteType.ACTIVITY, paramsType);
+                }
+                categories(routeMeta);
+            }
+
 
             //follow a sequence ,find out metas of group first,gennerate jaca file,then sattistics them as root.
             for (Element element : routeElements) {
@@ -149,11 +155,39 @@ public class RouteProcessor extends BaseProcessor {
                 categories(routeMeta);
             }
 
-            for (Map.Entry<String,Set<RouteMeta>> entry:groupMap.entrySet()){
+            for (Map.Entry<String, Set<RouteMeta>> entry : groupMap.entrySet()) {
                 String groupName = entry.getKey();
-                MethodSpec.Builder
-            }
+                logger.info(">>> groupName "+groupName+"<<<");
+                //build group method appearance code
+                MethodSpec.Builder loadIntoMethodGroupBuilder = MethodSpec.methodBuilder(METHOD_LOAD_INTO)
+                        .addAnnotation(Override.class)
+                        .addModifiers(Modifier.PUBLIC)
+                        .addParameter(groutParamSpec);
 
+                //buidl group method body code
+                Set<RouteMeta> routeMetaSet = entry.getValue();
+                for (RouteMeta routeMeta : routeMetaSet) {
+                    ClassName className = ClassName.get((TypeElement) routeMeta.getRawType());
+                    loadIntoMethodGroupBuilder.addStatement(
+                            "groups.put($S,$T.build($T." + routeMeta.getType() + ",$T.class,$S,$S," + routeMeta.getPriority() + "," + routeMeta.getExtra() + "))",
+                            routeMeta.getPath(),
+                            routeMetaCn,
+                            routeTpyeCn,
+                            className,
+                            routeMeta.getPath(),
+                            routeMeta.getGroup()
+                    );
+                }
+                String groupFileName = NAME_OF_GROUP + groupName;
+                JavaFile.builder(PACKAGE_OF_GENERATE_FILE,
+                        TypeSpec.classBuilder(groupFileName)
+                                .addSuperinterface(ClassName.get(type_IRouteGroup))
+                                .addModifiers(Modifier.PUBLIC)
+                                .addMethod(loadIntoMethodGroupBuilder.build())
+                                .build()
+                ).build().writeTo(mFiler);
+
+            }
 
 
         }
@@ -163,6 +197,7 @@ public class RouteProcessor extends BaseProcessor {
 
     /**
      * sort metas in group
+     *
      * @param routeMeta
      */
     private void categories(RouteMeta routeMeta) {

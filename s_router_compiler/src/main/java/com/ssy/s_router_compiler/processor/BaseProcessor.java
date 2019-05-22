@@ -1,5 +1,6 @@
 package com.ssy.s_router_compiler.processor;
 
+import com.ssy.s_router_annotation.facade.annotation.Route;
 import com.ssy.s_router_compiler.utils.Logger;
 import com.ssy.s_router_compiler.utils.TypeUtils;
 
@@ -7,6 +8,7 @@ import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -14,7 +16,6 @@ import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Filer;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.SourceVersion;
-import javax.lang.model.element.Element;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 
@@ -38,10 +39,12 @@ public abstract class BaseProcessor extends AbstractProcessor {
     @Override
     public synchronized void init(ProcessingEnvironment processingEnvironment) {
         super.init(processingEnvironment);
+        logger = new Logger(processingEnvironment.getMessager());
+
         mFiler = processingEnvironment.getFiler();
         types = processingEnvironment.getTypeUtils();
         elementUtils = processingEnvironment.getElementUtils();
-        logger = new Logger(processingEnvironment.getMessager());
+        logger.info(">>> init <<<");
 
         //尝试去获取 user configuration [modeleName]
         Map<String,String> options = processingEnvironment.getOptions();
@@ -75,6 +78,11 @@ public abstract class BaseProcessor extends AbstractProcessor {
     public SourceVersion getSupportedSourceVersion() {
         return SourceVersion.latestSupported();
     }
-
+    @Override
+    public Set<String> getSupportedAnnotationTypes() {
+        Set<String> types = new LinkedHashSet<>();
+        types.add(Route.class.getCanonicalName());
+        return types;
+    }
 
 }
