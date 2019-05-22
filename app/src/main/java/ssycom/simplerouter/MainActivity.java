@@ -7,7 +7,8 @@ import android.view.View;
 import com.example.demo.router.SimpleRouter;
 import com.example.router_annotationt.Route;
 
-@Route(path = "/activity/MainActivity")
+
+
 public class MainActivity extends AppCompatActivity {
 
     @Override
