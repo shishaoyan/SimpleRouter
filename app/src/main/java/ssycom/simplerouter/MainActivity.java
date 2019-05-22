@@ -5,7 +5,6 @@ import android.os.Bundle;
 import android.view.View;
 
 import com.example.demo.router.SimpleRouter;
-import com.example.router_annotationt.Route;
 
 
 

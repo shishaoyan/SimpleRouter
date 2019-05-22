@@ -12,11 +12,9 @@ android {
 
         javaCompileOptions {
             annotationProcessorOptions {
-<<<<<<< HEAD
-                arguments = [moduleName: project.getName()]
-=======
+
                 arguments = [AROUTER_MODULE_NAME: project.getName(), AROUTER_GENERATE_DOC: "enable"]
->>>>>>> dev
+
             }
         }
     }
@@ -41,16 +39,8 @@ dependencies {
     androidTestImplementation 'com.android.support.test:runner:1.0.2'
     androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
     implementation project(path: ':router')
-<<<<<<< HEAD
 
-
-
-    annotationProcessor project(path:':router_compiler')
-    implementation project(path: ':router_core')
-
-=======
     implementation project(path: ':s_router_annotation')
     implementation project(path: ':s_router_api')
     annotationProcessor project(path:':s_router_compiler')
->>>>>>> dev
 }
